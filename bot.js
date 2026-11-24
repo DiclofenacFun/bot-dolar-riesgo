@@ -11,9 +11,22 @@ const client = new TwitterApi({
 
 const STATE_FILE = './ultimo_estado.json';
 
-// Umbrales mínimos para publicar
-const UMBRAL_BLUE = 5;   // $5 ARS
-const UMBRAL_RIESGO = 5; // 5 puntos básicos
+// Umbrales mínimos para publicar y para alerta fuerte
+const UMBRAL_BLUE = 5;          // $5 ARS
+const UMBRAL_BLUE_FUERTE = 15;  // $15 ARS
+const UMBRAL_RIESGO = 5;        // 5 puntos básicos
+const UMBRAL_RIESGO_FUERTE = 15;// 15 puntos básicos
+
+// Pools de hashtags rotativos
+const HASHTAGS_BLUE = ['#DolarBlue', '#DolarHoy', '#Dolar', '#EconomiaArgentina'];
+const HASHTAGS_RIESGO = ['#RiesgoPais', '#Mercados', '#Bonos', '#EconomiaArgentina'];
+
+function elegirHashtags(lista, cantidad = 2) {
+  return [...lista]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, cantidad)
+    .join(' ');
+}
 
 async function checkAndTweet() {
   let lastState = { blueVenta: null, riesgoPais: null };
@@ -31,20 +44,28 @@ async function checkAndTweet() {
   const nuevoRiesgo = resRiesgo.valor;
   let huboCambios = false;
 
-  // 1. Verificar Dólar Blue (primera vez o variación >= $5)
+  // 1. Verificar Dólar Blue
   if (nuevoBlue) {
     const difBlue = lastState.blueVenta !== null ? nuevoBlue - lastState.blueVenta : null;
 
     if (difBlue === null || Math.abs(difBlue) >= UMBRAL_BLUE) {
+      let encabezado = '💵 Dólar Blue hoy';
       let tendencia = '📊 Cotización actual';
+
       if (difBlue !== null) {
-        const signo = difBlue > 0 ? '+' : '';
+        const esFuerte = Math.abs(difBlue) >= UMBRAL_BLUE_FUERTE;
+        if (esFuerte) {
+          encabezado = difBlue > 0
+            ? '🚨 FUERTE SUBA DEL DÓLAR BLUE HOY'
+            : '📉 FUERTE BAJA DEL DÓLAR BLUE HOY';
+        }
         tendencia = difBlue > 0
-          ? `📈 Subió ${signo}$${difBlue} (antes $${lastState.blueVenta})`
+          ? `📈 Subió +$${difBlue} (antes $${lastState.blueVenta})`
           : `📉 Bajó $${Math.abs(difBlue)} (antes $${lastState.blueVenta})`;
       }
 
-      const texto = `💵 Dólar Blue\n\nCompra: $${resBlue.compra}\nVenta: $${nuevoBlue}\n${tendencia}\n\n#DolarBlue #Argentina`;
+      const tags = elegirHashtags(HASHTAGS_BLUE, 2);
+      const texto = `${encabezado}\n\nCompra: $${resBlue.compra}\nVenta: $${nuevoBlue}\n${tendencia}\n\n${tags}`;
 
       await client.v2.tweet(texto);
       console.log('✅ Tweet de Dólar Blue publicado:', nuevoBlue);
@@ -55,20 +76,28 @@ async function checkAndTweet() {
     }
   }
 
-  // 2. Verificar Riesgo País (primera vez o variación >= 5 pb)
+  // 2. Verificar Riesgo País
   if (nuevoRiesgo) {
     const difRiesgo = lastState.riesgoPais !== null ? nuevoRiesgo - lastState.riesgoPais : null;
 
     if (difRiesgo === null || Math.abs(difRiesgo) >= UMBRAL_RIESGO) {
+      let encabezado = `🇦🇷 Riesgo País hoy: ${nuevoRiesgo} puntos básicos`;
       let tendencia = '📊 Índice actual';
+
       if (difRiesgo !== null) {
-        const signo = difRiesgo > 0 ? '+' : '';
+        const esFuerte = Math.abs(difRiesgo) >= UMBRAL_RIESGO_FUERTE;
+        if (esFuerte) {
+          encabezado = difRiesgo > 0
+            ? `🚨 FUERTE SUBA DEL RIESGO PAÍS HOY: ${nuevoRiesgo} pb`
+            : `🟢 FUERTE BAJA DEL RIESGO PAÍS HOY: ${nuevoRiesgo} pb`;
+        }
         tendencia = difRiesgo > 0
-          ? `🔴 Subió ${signo}${difRiesgo} pb (antes ${lastState.riesgoPais} pb)`
+          ? `🔴 Subió +${difRiesgo} pb (antes ${lastState.riesgoPais} pb)`
           : `🟢 Bajó ${Math.abs(difRiesgo)} pb (antes ${lastState.riesgoPais} pb)`;
       }
 
-      const texto = `🇦🇷 Riesgo País: ${nuevoRiesgo} puntos básicos\n${tendencia}\n\n#RiesgoPais #Economia`;
+      const tags = elegirHashtags(HASHTAGS_RIESGO, 2);
+      const texto = `${encabezado}\n${tendencia}\n\n${tags}`;
 
       await client.v2.tweet(texto);
       console.log('✅ Tweet de Riesgo País publicado:', nuevoRiesgo);
