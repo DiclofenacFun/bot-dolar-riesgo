@@ -1,0 +1,44 @@
+﻿name: Bot Dolar Blue y Riesgo Pais
+
+on:
+  schedule:
+    # Cada 10 min de 10:00 a 16:50 ART (13:00 a 19:50 UTC), Lunes a Viernes
+    - cron: '*/10 13-19 * * 1-5'
+    # De 17:00 a 17:30 ART (20:00 a 20:30 UTC), Lunes a Viernes
+    - cron: '0,10,20,30 20 * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar bot
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_SECRET: ${{ secrets.X_ACCESS_SECRET }}
+        run: node bot.js
+
+      - name: Guardar nuevo estado si hubo cambios
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action Bot"
+          git add ultimo_estado.json
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Actualiza estado del bot" && git push)
